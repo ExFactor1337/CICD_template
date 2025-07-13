@@ -1,4 +1,4 @@
-name: Smart Docker Builder
+name: Build and Push All Dockerfiles
 
 on:
   push:
@@ -6,19 +6,17 @@ on:
       - '*'
 
 jobs:
-  build-changed-dockerfiles:
+  build:
     runs-on: ubuntu-latest
-    env:
-      DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      REPO_NAME: ${{ github.repository }}
-      BRANCH_REF: ${{ github.ref }}
-      COMMIT_SHA: ${{ github.sha }}
+
+    strategy:
+      matrix:
+        dockerfile:
+          - dockerfile/mamba.Dockerfile
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2  # Needed for git diff
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -26,34 +24,26 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Changed Dockerfiles
+      - name: Sanitize Dockerfile name
+        id: sanitize
         run: |
-          REPO_BASE=$(basename "$REPO_NAME")
-          BRANCH_NAME=$(echo "$BRANCH_REF" | sed 's|refs/heads/||')
+          NAME=$(basename "${{ matrix.dockerfile }}" | sed 's/\.Dockerfile$//' | tr '/' '-' | tr '.' '-')
+          echo "name=$NAME" >> $GITHUB_OUTPUT
 
-          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep '^dockerfile/' || true)
+      - name: Extract metadata for image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ github.ref_name }}-${{ steps.sanitize.outputs.name }}
+            type=raw,value=${{ steps.sanitize.outputs.name }}
 
-          for dockerfile in $CHANGED_FILES; do
-            if [[ -f "$dockerfile" ]]; then
-              FILE_NAME=$(basename "$dockerfile")
-              TAG="${FILE_NAME%.*}"
-              CONTEXT_DIR=$(dirname "$dockerfile")
-
-              IMAGE="$DOCKER_USERNAME/$REPO_BASE"
-
-              echo "Building image '$IMAGE' with tags:"
-              echo "  - $TAG"
-              echo "  - $BRANCH_NAME-$TAG-$COMMIT_SHA"
-
-              docker build -f "$dockerfile" "$CONTEXT_DIR" \
-                -t "$IMAGE:$TAG" \
-                -t "$IMAGE:$BRANCH_NAME-$TAG-$COMMIT_SHA"
-
-              docker push "$IMAGE:$TAG"
-              docker push "$IMAGE:$TAG-latest"
-              docker push "$IMAGE:$BRANCH_NAME-$TAG-$COMMIT_SHA"
-
-              echo "Pushed $IMAGE:$TAG-latest, $IMAGE:$TAG and $IMAGE:$BRANCH_NAME-$TAG-$COMMIT_SHA"
-            fi
-          done
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
 
