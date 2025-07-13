@@ -23,7 +23,7 @@ jobs:
 
       - name: Build and Push Changed Dockerfiles
         run: |
-          DOCKER_USERNAME="${{ secrets.DOCKER_USERNAME }}"
+          DOCKER_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
           REPO_NAME=$(basename "${{ github.repository }}")
           BRANCH_NAME=$(echo "${{ github.ref }}" | sed 's|refs/heads/||')
           COMMIT_SHA="${{ github.sha }}"
