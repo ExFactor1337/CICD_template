@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         dockerfile:
-          - dockerfile/mamba.Dockerfile
+          - dockerfiles/mamba.Dockerfile
 
     steps:
       - name: Checkout code
