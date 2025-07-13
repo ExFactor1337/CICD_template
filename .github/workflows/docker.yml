@@ -8,6 +8,11 @@ on:
 jobs:
   build-changed-dockerfiles:
     runs-on: ubuntu-latest
+    env:
+      DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      REPO_NAME: ${{ github.repository }}
+      BRANCH_REF: ${{ github.ref }}
+      COMMIT_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout Repository
@@ -23,30 +28,32 @@ jobs:
 
       - name: Build and Push Changed Dockerfiles
         run: |
-          DOCKER_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-          REPO_NAME=$(basename "${{ github.repository }}")
-          BRANCH_NAME=$(echo "${{ github.ref }}" | sed 's|refs/heads/||')
-          COMMIT_SHA="${{ github.sha }}"
+          REPO_BASE=$(basename "$REPO_NAME")
+          BRANCH_NAME=$(echo "$BRANCH_REF" | sed 's|refs/heads/||')
 
           CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep '^dockerfile/' || true)
 
           for dockerfile in $CHANGED_FILES; do
             if [[ -f "$dockerfile" ]]; then
               FILE_NAME=$(basename "$dockerfile")
-              TAG="${FILE_NAME%.*}"  # e.g., software.Dockerfile > software
+              TAG="${FILE_NAME%.*}"
               CONTEXT_DIR=$(dirname "$dockerfile")
 
-              IMAGE="$DOCKER_USERNAME/$REPO_NAME"
+              IMAGE="$DOCKER_USERNAME/$REPO_BASE"
 
-              echo "  Building image '$IMAGE' with tags:"
+              echo "Building image '$IMAGE' with tags:"
               echo "  - $TAG"
               echo "  - $BRANCH_NAME-$TAG-$COMMIT_SHA"
 
-              docker build -f "$dockerfile" "$CONTEXT_DIR" -t "$IMAGE:$TAG" -t "$IMAGE:$BRANCH_NAME-$TAG-$COMMIT_SHA"
+              docker build -f "$dockerfile" "$CONTEXT_DIR" \
+                -t "$IMAGE:$TAG" \
+                -t "$IMAGE:$BRANCH_NAME-$TAG-$COMMIT_SHA"
+
               docker push "$IMAGE:$TAG"
+              docker push "$IMAGE:$TAG-latest"
               docker push "$IMAGE:$BRANCH_NAME-$TAG-$COMMIT_SHA"
 
-              echo "Pushed $IMAGE:$TAG and $IMAGE:$BRANCH_NAME-$TAG-$COMMIT_SHA"
+              echo "Pushed $IMAGE:$TAG-latest, $IMAGE:$TAG and $IMAGE:$BRANCH_NAME-$TAG-$COMMIT_SHA"
             fi
           done
 
