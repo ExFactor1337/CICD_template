@@ -34,15 +34,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHPAT }}
 
-      - name: Normalize tag components
+      - name: Sanitize image reference
         id: vars
         run: |
-          FILE_NAME=$(basename "${{ matrix.dockerfile }}")
-          BRANCH=$(echo "${GITHUB_REF##*/}" | tr '[:upper:]' '[:lower:]' | tr '/' '-')
+          FILE_NAME=$(basename "${{ matrix.dockerfile }}" | sed 's/Dockerfile\.//')
+          BRANCH=$(echo "${GITHUB_REF##*/}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8 | tr '[:upper:]' '[:lower:]')
-          echo "name=${FILE_NAME}" >> $GITHUB_OUTPUT
-          echo "tag1=${{ env.REGISTRY }}/${{ env.REPO }}:${FILE_NAME}-${BRANCH}-latest" >> $GITHUB_OUTPUT
-          echo "tag2=${{ env.REGISTRY }}/${{ env.REPO }}:${FILE_NAME}-${BRANCH}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+
+          echo "tag1=ghcr.io/${REPO}:${FILE_NAME}-${BRANCH}-latest" >> $GITHUB_OUTPUT
+          echo "tag2=ghcr.io/${REPO}:${FILE_NAME}-${BRANCH}-${SHORT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Build and Push Image
         uses: docker/build-push-action@v5
