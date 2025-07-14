@@ -2,7 +2,7 @@ name: GHCR Build Pipeline
 
 on:
   push:
-    branches: [main, dev, staging]
+    branches: [main, develop, release*, feature*, bug*]
 
 env:
   REGISTRY: ghcr.io
@@ -18,7 +18,7 @@ jobs:
     strategy:
       matrix:
         dockerfile:
-          - dockerfiles/mamba
+          - docker/mamba
 
     steps:
       - name: Checkout code
@@ -34,13 +34,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHPAT }}
 
-      - name: Set image tags
+      - name: Normalize tag components
         id: vars
         run: |
           FILE_NAME=$(basename "${{ matrix.dockerfile }}")
-          BRANCH=$(echo "${GITHUB_REF##*/}" | tr '/' '-')
-          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
-          echo "File Name: $FILE_NAME; Branch: $BRANCH"
+          BRANCH=$(echo "${GITHUB_REF##*/}" | tr '[:upper:]' '[:lower:]' | tr '/' '-')
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8 | tr '[:upper:]' '[:lower:]')
           echo "name=${FILE_NAME}" >> $GITHUB_OUTPUT
           echo "tag1=${{ env.REGISTRY }}/${{ env.REPO }}:${FILE_NAME}-${BRANCH}-latest" >> $GITHUB_OUTPUT
           echo "tag2=${{ env.REGISTRY }}/${{ env.REPO }}:${FILE_NAME}-${BRANCH}-${SHORT_SHA}" >> $GITHUB_OUTPUT
